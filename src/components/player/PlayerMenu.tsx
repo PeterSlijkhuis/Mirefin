@@ -43,7 +43,7 @@ export function PlayerMenu(p: {
     <View style={styles.backdrop}>
       <Pressable style={StyleSheet.absoluteFill} onPress={p.onClose} accessibilityLabel="Close menu" />
       <View style={styles.panel}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.tabs}>
           {tabs.map((t) => (
             <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, tab === t && styles.tabActive]}>
               <Text style={[styles.tabText, tab === t && { color: colors.text }]}>{t}</Text>
@@ -145,8 +145,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.lg,
     paddingTop: spacing.md,
   },
-  tabs: { paddingHorizontal: spacing.md, gap: spacing.xs, paddingBottom: spacing.sm },
-  tab: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill },
+  tabs: { paddingHorizontal: spacing.md, gap: spacing.xs, paddingBottom: spacing.sm, alignItems: 'center' },
+  tab: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, alignSelf: 'center' },
   tabActive: { backgroundColor: colors.accentDim },
   tabText: { color: colors.textMuted, fontWeight: '600' },
   option: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },

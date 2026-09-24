@@ -17,7 +17,7 @@ import expo.modules.kotlin.views.ExpoView
  * posted to the main thread before dispatch.
  */
 class MpvPlayerView(context: Context, appContext: AppContext) :
-  ExpoView(context, appContext), SurfaceHolder.Callback, MPVLib.EventObserver {
+  ExpoView(context, appContext), SurfaceHolder.Callback, MPVLib.EventObserver, MPVLib.LogObserver {
 
   private val onProgress by EventDispatcher()
   private val onStateChange by EventDispatcher()
@@ -40,6 +40,7 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
   private var position = 0.0
   private var duration = 0.0
   private var lastProgressAt = 0L
+  private val recentErrors = ArrayDeque<String>()
 
   init {
     surface.holder.addCallback(this)
@@ -70,6 +71,7 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     m.setOptionString("user-agent", "Mirefin")
     m.init()
     m.addObserver(this)
+    m.addLogObserver(this)
     m.observeProperty("time-pos", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
     m.observeProperty("duration", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
     m.observeProperty("pause", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
@@ -161,6 +163,7 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     main.removeCallbacksAndMessages(null)
     mpv?.let {
       it.removeObserver(this)
+      it.removeLogObserver(this)
       it.destroy()
     }
     mpv = null
@@ -224,10 +227,24 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
       }
       MPVLib.MpvEvent.MPV_EVENT_END_FILE -> main.post {
         // An end right after loading means mpv couldn't open the stream.
-        if (!fileLoaded) onError(mapOf("message" to "mpv could not open the stream"))
+        if (!fileLoaded) onError(mapOf("message" to failureMessage()))
         else onEnd(mapOf("position" to position, "duration" to duration))
       }
     }
+  }
+
+  // mpv's own error lines explain why a stream didn't open; keep the last few.
+  override fun logMessage(prefix: String, level: Int, text: String) {
+    if (level > 20) return // MPV_LOG_LEVEL_ERROR
+    synchronized(recentErrors) {
+      recentErrors.addLast("$prefix: ${text.trim()}")
+      while (recentErrors.size > 3) recentErrors.removeFirst()
+    }
+  }
+
+  private fun failureMessage(): String {
+    val detail = synchronized(recentErrors) { recentErrors.joinToString(" / ") }
+    return if (detail.isEmpty()) "mpv could not open the stream" else "mpv could not open the stream ($detail)"
   }
 
   private fun readTracks(): List<Map<String, Any>> {

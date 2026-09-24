@@ -39,6 +39,7 @@ export function NativeEngine(p: EngineProps) {
 
   useEffect(() => {
     started.current = false;
+    let alive = true;
     player
       .replaceAsync({
         uri: p.uri,
@@ -46,8 +47,11 @@ export function NativeEngine(p: EngineProps) {
         contentType: p.isHls ? 'hls' : undefined,
         metadata: { title: p.title, artist: p.artist },
       })
-      .then(() => player.play())
-      .catch((e) => p.onError(e instanceof Error ? e.message : String(e)));
+      .then(() => alive && player.play())
+      .catch((e) => alive && p.onError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.uri]);
 

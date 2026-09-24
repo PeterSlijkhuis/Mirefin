@@ -14,6 +14,7 @@ export interface UserData {
   Played?: boolean;
   IsFavorite?: boolean;
   UnplayedItemCount?: number;
+  LastPlayedDate?: string;
 }
 
 export interface BaseItem {
@@ -240,23 +241,32 @@ export class JellyfinClient {
     return this.get<ItemsResult>('/UserViews', { userId: this.userId });
   }
 
-  resume(limit = 20) {
-    return this.get<ItemsResult>('/UserItems/Resume', {
+  /** In-progress items, optionally only those played within `maxDays`. */
+  async resume(limit = 20, maxDays = 0) {
+    const res = await this.get<ItemsResult>('/UserItems/Resume', {
       userId: this.userId,
       limit,
       mediaTypes: 'Video',
       fields: DEFAULT_FIELDS,
       enableImageTypes: 'Primary,Backdrop,Thumb,Logo',
     });
+    const cutoff = maxDays ? Date.now() - maxDays * 86_400_000 : 0;
+    res.Items = res.Items.filter(
+      (i) => !i.UserData?.Played && (!cutoff || !i.UserData?.LastPlayedDate || Date.parse(i.UserData.LastPlayedDate) >= cutoff),
+    );
+    return res;
   }
 
-  nextUp(limit = 20, seriesId?: string) {
+  /** Next episodes, skipping series last watched more than `maxDays` ago. */
+  nextUp(limit = 20, seriesId?: string, maxDays = 0) {
     return this.get<ItemsResult>('/Shows/NextUp', {
       userId: this.userId,
       limit,
       seriesId,
       fields: DEFAULT_FIELDS,
       enableResumable: false,
+      enableRewatching: false,
+      nextUpDateCutoff: maxDays && !seriesId ? new Date(Date.now() - maxDays * 86_400_000).toISOString() : undefined,
     });
   }
 

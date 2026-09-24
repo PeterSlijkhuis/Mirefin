@@ -62,6 +62,8 @@ export default function Player() {
   const planRef = useRef<PlaybackPlan>(undefined);
   const started = useRef(false);
   const fellBack = useRef({ engine: false, transcode: false });
+  /** Why each attempt failed, shown if every fallback fails. */
+  const attempts = useRef<string[]>([]);
   const autoSkipped = useRef(new Set<number>());
 
   /* ---------- reporting ---------- */
@@ -184,6 +186,7 @@ export default function Player() {
   const fail = (message: string) => {
     const p = planRef.current;
     if (!p) return setError(message);
+    attempts.current.push(`${ENGINE_LABEL[p.engine]}, ${p.method.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}: ${message}`);
     if (p.engine !== 'native' && !fellBack.current.engine) {
       fellBack.current.engine = true;
       setNotice(`${ENGINE_LABEL[p.engine]} couldn't play this (${message}). Switched to ${ENGINE_LABEL.native}.`);
@@ -195,8 +198,15 @@ export default function Player() {
       reload({ forceTranscode: true });
       return;
     }
-    setError(`${ENGINE_LABEL[p.engine]} couldn't play this (${p.method}): ${message}`);
+    setError(`This video couldn't be played.\n\n${attempts.current.join('\n\n')}`);
   };
+
+  /** Drops callbacks from an engine that has been replaced by a newer plan. */
+  const live =
+    <A extends unknown[]>(owner: PlaybackPlan, fn: (...args: A) => void) =>
+    (...args: A) => {
+      if (planRef.current === owner) fn(...args);
+    };
 
   const playNext = () => {
     if (next) router.replace({ pathname: '/player/[id]', params: { id: next.Id } });
@@ -299,12 +309,12 @@ export default function Player() {
           hardwareDecoding={settings.hardwareDecoding}
           title={title}
           artist={subtitleLine}
-          onProgress={onProgress}
-          onReady={onReady}
-          onPausedChange={setPaused}
-          onBuffering={setBuffering}
-          onEnd={onEnd}
-          onError={fail}
+          onProgress={live(plan, onProgress)}
+          onReady={live(plan, onReady)}
+          onPausedChange={live(plan, setPaused)}
+          onBuffering={live(plan, setBuffering)}
+          onEnd={live(plan, onEnd)}
+          onError={live(plan, fail)}
         />
       )}
 
@@ -330,11 +340,12 @@ export default function Player() {
       {error && (
         <View style={styles.center}>
           <Ionicons name="alert-circle-outline" size={40} color={colors.danger} />
-          <Text style={styles.error}>{error}</Text>
+          <Text style={styles.error} selectable>{error}</Text>
           <Pressable
             style={styles.retry}
             onPress={() => {
               fellBack.current = { engine: false, transcode: false };
+              attempts.current = [];
               reload({ forceTranscode: false, engine: undefined });
             }}
           >
