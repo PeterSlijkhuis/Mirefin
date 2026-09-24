@@ -124,8 +124,20 @@ export default function Player() {
     if (r && seeked.current) client.reportProgress(r).catch(() => {});
   });
 
+  // A stream the device can't open (bad auth, unsupported codec) can end
+  // immediately instead of erroring. Treat that as a failure, not the end.
   useEventListener(player, 'playToEnd', () => {
-    router.back();
+    const watched = position.current - startTicks / TICKS_PER_SECOND;
+    if (watched > 5) {
+      router.back();
+      return;
+    }
+    if (prepared?.method !== 'Transcode' && !triedTranscode.current) {
+      triedTranscode.current = true;
+      load(true).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      return;
+    }
+    setError(`The stream ended right away (${prepared?.method ?? 'unknown'}). The server may have refused it.`);
   });
 
   // Periodic progress so the server can resume where we left off.
