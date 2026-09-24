@@ -69,3 +69,7 @@ Type-check with `npm run typecheck`.
 
 - Cleartext HTTP is allowed on both platforms so LAN servers like `http://192.168.1.10:8096` work.
 - Android direct-plays MKV/WebM with H.264, HEVC, VP9 and AV1; iOS direct-plays MP4/MOV with H.264 and HEVC. Everything else is transcoded by the server.
+
+## Android APK
+
+Every push builds a release APK with GitHub Actions (`.github/workflows/android-apk.yml`). Open the latest **Android APK** run under the repository's Actions tab and download the `WholphinMobile-apk` artifact. It is signed with the default debug key, so it installs directly (allow installs from unknown sources) but is not suitable for the Play Store.
