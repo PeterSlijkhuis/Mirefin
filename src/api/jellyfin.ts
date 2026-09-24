@@ -60,9 +60,32 @@ export interface BaseItem {
   MediaSources?: MediaSource[];
 }
 
+export interface MediaStream {
+  Index: number;
+  Type: 'Video' | 'Audio' | 'Subtitle' | 'EmbeddedImage' | string;
+  Codec?: string;
+  Language?: string;
+  Title?: string;
+  DisplayTitle?: string;
+  IsDefault?: boolean;
+  IsForced?: boolean;
+  IsExternal?: boolean;
+  IsTextSubtitleStream?: boolean;
+  DeliveryMethod?: 'Encode' | 'Embed' | 'External' | 'Hls' | string;
+  DeliveryUrl?: string;
+  Channels?: number;
+  Width?: number;
+  Height?: number;
+}
+
 export interface MediaSource {
   Id: string;
+  Name?: string;
+  Path?: string;
+  Size?: number;
+  Bitrate?: number;
   Container?: string;
+  MediaStreams?: MediaStream[];
   SupportsDirectPlay?: boolean;
   SupportsDirectStream?: boolean;
   SupportsTranscoding?: boolean;
@@ -308,15 +331,31 @@ export class JellyfinClient {
     return favorite ? this.post(`/UserFavoriteItems/${id}`, undefined, { userId: this.userId }) : this.del(`/UserFavoriteItems/${id}?userId=${this.userId}`);
   }
 
-  playbackInfo(id: string, startTimeTicks: number, deviceProfile: unknown) {
+  playbackInfo(
+    id: string,
+    opts: {
+      startTimeTicks?: number;
+      deviceProfile: unknown;
+      maxStreamingBitrate?: number;
+      mediaSourceId?: string;
+      audioStreamIndex?: number;
+      subtitleStreamIndex?: number;
+      enableDirectPlay?: boolean;
+      enableDirectStream?: boolean;
+    },
+  ) {
     return this.post<{ MediaSources: MediaSource[]; PlaySessionId: string }>(
       `/Items/${id}/PlaybackInfo`,
       {
         UserId: this.userId,
-        StartTimeTicks: startTimeTicks,
-        DeviceProfile: deviceProfile,
-        EnableDirectPlay: true,
-        EnableDirectStream: true,
+        StartTimeTicks: opts.startTimeTicks ?? 0,
+        DeviceProfile: opts.deviceProfile,
+        MaxStreamingBitrate: opts.maxStreamingBitrate,
+        MediaSourceId: opts.mediaSourceId,
+        AudioStreamIndex: opts.audioStreamIndex,
+        SubtitleStreamIndex: opts.subtitleStreamIndex,
+        EnableDirectPlay: opts.enableDirectPlay ?? true,
+        EnableDirectStream: opts.enableDirectStream ?? true,
         EnableTranscoding: true,
         AllowVideoStreamCopy: true,
         AllowAudioStreamCopy: true,
@@ -350,11 +389,24 @@ export class JellyfinClient {
         mediaSourceId: source.Id,
         deviceId: s.deviceId,
         playSessionId,
-        api_key: s.token,
+        ApiKey: s.token,
       })}`;
     }
-    const url = `${s.serverUrl}${source.TranscodingUrl}`;
-    return /[?&]api_key=/i.test(url) ? url : `${url}&api_key=${s.token}`;
+    return this.withApiKey(`${s.serverUrl}${source.TranscodingUrl}`);
+  }
+
+  /**
+   * Jellyfin 10.11 dropped the legacy `api_key` parameter; `ApiKey` works on
+   * 10.9+. Players also get the Authorization header, see `authHeaders`.
+   */
+  withApiKey(url: string): string {
+    if (/[?&]api_?key=/i.test(url)) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}ApiKey=${this.session.token}`;
+  }
+
+  /** Headers for native players and downloads fetching media directly. */
+  get authHeaders(): Record<string, string> {
+    return { Authorization: authHeader(this.session.deviceId, this.session.token) };
   }
 
   imageUrl(itemId: string, type: ImageType, opts: { tag?: string; width?: number; index?: number } = {}): string {

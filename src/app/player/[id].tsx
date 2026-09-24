@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -37,42 +37,47 @@ export default function Player() {
     p.staysActiveInBackground = false;
   });
 
-  // Ask the server how to play this item, then load the stream.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [item, info] = await Promise.all([
-          client.item(id),
-          client.playbackInfo(id, startTicks, buildDeviceProfile()),
-        ]);
-        const source = info.MediaSources?.[0];
-        if (!source) throw new Error('The server returned no playable source for this item.');
-        const uri = client.streamUrl(id, source, info.PlaySessionId);
-        const method: PlaybackReport['PlayMethod'] = source.SupportsDirectPlay
+  // Ask the server how to play this item, then load the stream. If direct
+  // play fails on the device, `load(true)` retries with a server transcode.
+  const triedTranscode = useRef(false);
+  const load = useCallback(
+    async (forceTranscode: boolean) => {
+      const [item, info] = await Promise.all([
+        client.item(id),
+        client.playbackInfo(id, {
+          startTimeTicks: startTicks,
+          deviceProfile: buildDeviceProfile(),
+          enableDirectPlay: !forceTranscode,
+          enableDirectStream: !forceTranscode,
+        }),
+      ]);
+      const source = info.MediaSources?.[0];
+      if (!source) throw new Error('The server returned no playable source for this item.');
+      const uri = client.streamUrl(id, source, info.PlaySessionId);
+      const method: PlaybackReport['PlayMethod'] =
+        source.SupportsDirectPlay && !forceTranscode
           ? 'DirectPlay'
-          : source.SupportsDirectStream
+          : source.SupportsDirectStream && !forceTranscode
             ? 'DirectStream'
             : 'Transcode';
-        if (cancelled) return;
-        setPrepared({ item, source, playSessionId: info.PlaySessionId, uri, method });
-        await player.replaceAsync({
-          uri,
-          contentType: method === 'DirectPlay' ? undefined : 'hls',
-          metadata: {
-            title: item.Type === 'Episode' ? `${episodeLabel(item) ?? ''} ${item.Name}`.trim() : item.Name,
-            artist: item.SeriesName,
-          },
-        });
-        player.play();
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [client, id, startTicks, player]);
+      setPrepared({ item, source, playSessionId: info.PlaySessionId, uri, method });
+      await player.replaceAsync({
+        uri,
+        headers: client.authHeaders,
+        contentType: method === 'DirectPlay' ? undefined : 'hls',
+        metadata: {
+          title: item.Type === 'Episode' ? `${episodeLabel(item) ?? ''} ${item.Name}`.trim() : item.Name,
+          artist: item.SeriesName,
+        },
+      });
+      player.play();
+    },
+    [client, id, startTicks, player],
+  );
+
+  useEffect(() => {
+    load(false).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [load]);
 
   // Track position from events so the final "stopped" report still works
   // after the native player has been released on unmount.
@@ -104,7 +109,12 @@ export default function Player() {
         if (r) client.reportStart(r).catch(() => {});
       }
     } else if (status === 'error') {
-      setError(err?.message ?? 'Playback failed');
+      if (prepared?.method !== 'Transcode' && !triedTranscode.current) {
+        triedTranscode.current = true;
+        load(true).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+        return;
+      }
+      setError(`Playback failed (${prepared?.method ?? 'unknown'}): ${err?.message ?? 'unknown error'}`);
     }
   });
 
