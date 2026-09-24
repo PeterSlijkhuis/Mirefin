@@ -48,7 +48,10 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
   }
 
   private fun createPlayer() {
-    val m = MPVLib.create(context)
+    val m = MPVLib.create(context) ?: run {
+      main.post { onError(mapOf("message" to "mpv could not start on this device")) }
+      return
+    }
     m.setOptionString("vo", "gpu")
     m.setOptionString("gpu-context", "android")
     m.setOptionString("opengl-es", "yes")
