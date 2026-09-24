@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { CastButton } from 'react-native-google-cast';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -18,7 +19,9 @@ import { MediaRow } from '@/components/cards';
 import { Hero } from '@/components/Hero';
 import { Button, Chip, ErrorView, IconButton, Loading, ProgressBar } from '@/components/ui';
 import { openItem, playItem, toPosterCard } from '@/lib/items';
+import { formatBytes, useDownloads } from '@/lib/downloads';
 import { useClient } from '@/lib/session';
+import { useSettings } from '@/lib/settings';
 import { colors, radius, spacing, type } from '@/lib/theme';
 import { useAsync } from '@/lib/useAsync';
 
@@ -149,6 +152,22 @@ function Detail({ client, item, onChanged }: { client: JellyfinClient; item: Bas
             active={favorite}
             onPress={toggleFavorite}
           />
+          {!isSeries && <DownloadButton client={client} item={item} />}
+          {!isSeries && (
+            <IconButton
+              icon="chatbox-ellipses-outline"
+              label="Subtitles"
+              onPress={() => router.push({ pathname: '/subtitles/[id]', params: { id: item.Id } })}
+            />
+          )}
+          {!isSeries && (
+            <View style={styles.cast}>
+              <View style={styles.castCircle}>
+                <CastButton style={{ width: 22, height: 22, tintColor: colors.text }} tintColor={colors.text} />
+              </View>
+              <Text style={styles.castLabel}>Cast</Text>
+            </View>
+          )}
           {item.Type === 'Episode' && item.SeriesId && (
             <IconButton
               icon="tv-outline"
@@ -306,6 +325,17 @@ function Cast({ client, item }: { client: JellyfinClient; item: BaseItem }) {
 }
 
 const styles = StyleSheet.create({
+  cast: { alignItems: 'center', gap: spacing.xs, minWidth: 64 },
+  castCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  castLabel: { color: colors.textMuted, fontSize: 11 },
   screen: { flex: 1, backgroundColor: colors.background },
   body: { paddingHorizontal: spacing.lg, gap: spacing.md, marginBottom: spacing.xl },
   actions: { flexDirection: 'row', gap: spacing.lg, marginVertical: spacing.sm },
@@ -343,3 +373,32 @@ const styles = StyleSheet.create({
   },
   personName: { color: colors.text, fontSize: 12, fontWeight: '600', textAlign: 'center' },
 });
+
+function DownloadButton({ client, item }: { client: JellyfinClient; item: BaseItem }) {
+  const downloads = useDownloads();
+  const { settings } = useSettings();
+  const record = downloads.get(item.Id);
+
+  if (record?.status === 'done') {
+    return (
+      <IconButton
+        icon="checkmark-done-circle"
+        label="Play offline"
+        active
+        onPress={() => router.push({ pathname: '/player/[id]', params: { id: item.Id, offline: '1' } })}
+      />
+    );
+  }
+  if (record?.status === 'downloading') {
+    const pct = record.total ? Math.round((record.bytes / record.total) * 100) : 0;
+    return <IconButton icon="close-circle-outline" label={`${pct}% · Cancel`} active onPress={() => downloads.cancel(item.Id)} />;
+  }
+  return (
+    <IconButton
+      icon="download-outline"
+      label={record?.status === 'error' ? 'Retry download' : 'Download'}
+      onPress={() => downloads.start(client, settings, item.Id).catch(() => {})}
+      accessibilityHint={record?.total ? formatBytes(record.total) : undefined}
+    />
+  );
+}

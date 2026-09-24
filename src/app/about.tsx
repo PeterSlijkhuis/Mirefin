@@ -5,6 +5,8 @@ import { colors, radius, spacing, type } from '@/lib/theme';
 
 const LINKS = [
   { label: 'Wholphin on GitHub', url: 'https://github.com/damontecres/Wholphin' },
+  { label: 'mpv', url: 'https://mpv.io' },
+  { label: 'VLC', url: 'https://www.videolan.org' },
   { label: 'Jellyfin', url: 'https://jellyfin.org' },
   { label: 'Seerr', url: 'https://github.com/seerr-team/seerr' },
 ];
@@ -13,20 +15,21 @@ export default function About() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <View style={{ gap: spacing.xs }}>
-        <Text style={type.title}>WholphinMobile</Text>
+        <Text style={type.title}>Mirefin</Text>
         <Text style={type.meta}>Version {CLIENT_VERSION}</Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.heading}>Credits</Text>
         <Text style={type.body}>
-          WholphinMobile's look and feel is inspired by Wholphin, the open-source Android TV client for Jellyfin created
-          by damontecres and its contributors. Huge thanks to them for the design this app follows on phones and
-          tablets.
+          Mirefin's look and feel is inspired by Wholphin, the open-source Android TV client for Jellyfin created by
+          damontecres and its contributors. Its playback options (mpv first, the system player for HDR, per-content
+          player choice) follow Wholphin and Moonfin. Huge thanks to both projects.
         </Text>
         <Text style={type.body}>
-          This app is an independent project. It is not affiliated with or endorsed by the Wholphin, Jellyfin or Seerr
-          projects, and it shares no code with Wholphin.
+          This app is an independent project. It is not affiliated with or endorsed by the Wholphin, Moonfin, Jellyfin or
+          Seerr projects, and it shares no code with Wholphin or Moonfin. Video playback uses libmpv on Android and
+          libVLC on iOS.
         </Text>
       </View>
 

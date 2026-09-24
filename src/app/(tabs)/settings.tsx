@@ -44,6 +44,19 @@ export default function Settings() {
       </View>
 
       <View style={styles.group}>
+        <Text style={styles.groupTitle}>Playback</Text>
+        <View style={styles.card}>
+          <Row
+            icon="play-circle-outline"
+            label="Playback & subtitles"
+            value="Players, quality, subtitle style, skipping"
+            onPress={() => router.push('/playback-settings')}
+          />
+          <Row icon="download-outline" label="Downloads" value="Watch offline" onPress={() => router.push('/downloads')} />
+        </View>
+      </View>
+
+      <View style={styles.group}>
         <Text style={styles.groupTitle}>Requests</Text>
         <View style={styles.card}>
           <Row

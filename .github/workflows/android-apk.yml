@@ -51,5 +51,5 @@ jobs:
 
       - uses: actions/upload-artifact@v5
         with:
-          name: WholphinMobile-apk
+          name: Mirefin-apk
           path: android/app/build/outputs/apk/release/app-release.apk
