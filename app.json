@@ -61,7 +61,8 @@
               "pickFirst": [
                 "**/libc++_shared.so"
               ]
-            }
+            },
+            "minSdkVersion": 26
           }
         }
       ],

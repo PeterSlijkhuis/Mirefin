@@ -97,6 +97,7 @@ Type-check with `npm run typecheck`.
 
 ## Notes
 
+- Android 8.0 (API 26) or newer is required, because libmpv needs it.
 - Cleartext HTTP is allowed on both platforms so LAN servers like `http://192.168.1.10:8096` work.
 - With mpv or VLC nearly every file direct-plays. On the system player, Android direct-plays MKV/WebM with H.264, HEVC, VP9 and AV1, and iOS direct-plays MP4/MOV with H.264 and HEVC; everything else is transcoded by the server.
 - Casting uses the default media receiver, so the server converts to MP4 or HLS the Chromecast can play.
