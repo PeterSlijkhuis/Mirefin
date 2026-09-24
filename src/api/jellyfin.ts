@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-export const CLIENT_NAME = 'WholphinMobile';
+export const CLIENT_NAME = 'Mirefin';
 export const CLIENT_VERSION = Constants.expoConfig?.version ?? '0.1.0';
 
 export const TICKS_PER_SECOND = 10_000_000;
@@ -60,9 +60,34 @@ export interface BaseItem {
   MediaSources?: MediaSource[];
 }
 
+export interface MediaStream {
+  Index: number;
+  Type: 'Video' | 'Audio' | 'Subtitle' | 'EmbeddedImage' | string;
+  Codec?: string;
+  Language?: string;
+  Title?: string;
+  DisplayTitle?: string;
+  IsDefault?: boolean;
+  IsForced?: boolean;
+  IsExternal?: boolean;
+  IsTextSubtitleStream?: boolean;
+  DeliveryMethod?: 'Encode' | 'Embed' | 'External' | 'Hls' | string;
+  DeliveryUrl?: string;
+  Channels?: number;
+  Width?: number;
+  Height?: number;
+  VideoRange?: string;
+  VideoRangeType?: string;
+}
+
 export interface MediaSource {
   Id: string;
+  Name?: string;
+  Path?: string;
+  Size?: number;
+  Bitrate?: number;
   Container?: string;
+  MediaStreams?: MediaStream[];
   SupportsDirectPlay?: boolean;
   SupportsDirectStream?: boolean;
   SupportsTranscoding?: boolean;
@@ -308,15 +333,31 @@ export class JellyfinClient {
     return favorite ? this.post(`/UserFavoriteItems/${id}`, undefined, { userId: this.userId }) : this.del(`/UserFavoriteItems/${id}?userId=${this.userId}`);
   }
 
-  playbackInfo(id: string, startTimeTicks: number, deviceProfile: unknown) {
+  playbackInfo(
+    id: string,
+    opts: {
+      startTimeTicks?: number;
+      deviceProfile: unknown;
+      maxStreamingBitrate?: number;
+      mediaSourceId?: string;
+      audioStreamIndex?: number;
+      subtitleStreamIndex?: number;
+      enableDirectPlay?: boolean;
+      enableDirectStream?: boolean;
+    },
+  ) {
     return this.post<{ MediaSources: MediaSource[]; PlaySessionId: string }>(
       `/Items/${id}/PlaybackInfo`,
       {
         UserId: this.userId,
-        StartTimeTicks: startTimeTicks,
-        DeviceProfile: deviceProfile,
-        EnableDirectPlay: true,
-        EnableDirectStream: true,
+        StartTimeTicks: opts.startTimeTicks ?? 0,
+        DeviceProfile: opts.deviceProfile,
+        MaxStreamingBitrate: opts.maxStreamingBitrate,
+        MediaSourceId: opts.mediaSourceId,
+        AudioStreamIndex: opts.audioStreamIndex,
+        SubtitleStreamIndex: opts.subtitleStreamIndex,
+        EnableDirectPlay: opts.enableDirectPlay ?? true,
+        EnableDirectStream: opts.enableDirectStream ?? true,
         EnableTranscoding: true,
         AllowVideoStreamCopy: true,
         AllowAudioStreamCopy: true,
@@ -337,6 +378,59 @@ export class JellyfinClient {
     return this.post('/Sessions/Playing/Stopped', body);
   }
 
+  /** Next episode after `episodeId` in its series, if any. */
+  async nextEpisode(seriesId: string, episodeId: string): Promise<BaseItem | undefined> {
+    const res = await this.get<ItemsResult>(`/Shows/${seriesId}/Episodes`, {
+      userId: this.userId,
+      startItemId: episodeId,
+      limit: 2,
+      fields: DEFAULT_FIELDS,
+    });
+    return res.Items.find((e) => e.Id !== episodeId);
+  }
+
+  /** Intro/outro markers (Jellyfin 10.10+ media segments). */
+  async mediaSegments(itemId: string): Promise<MediaSegment[]> {
+    try {
+      const res = await this.get<{ Items: MediaSegment[] }>(`/MediaSegments/${itemId}`);
+      return res.Items ?? [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** A subtitle stream converted by the server to the given format. */
+  subtitleUrl(itemId: string, mediaSourceId: string, streamIndex: number, format = 'vtt'): string {
+    return this.withApiKey(
+      `${this.session.serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${streamIndex}/0/Stream.${format}`,
+    );
+  }
+
+  searchRemoteSubtitles(itemId: string, language: string) {
+    return this.get<RemoteSubtitle[]>(`/Items/${itemId}/RemoteSearch/Subtitles/${language}`);
+  }
+
+  downloadRemoteSubtitle(itemId: string, subtitleId: string) {
+    return this.post(`/Items/${itemId}/RemoteSearch/Subtitles/${encodeURIComponent(subtitleId)}`);
+  }
+
+  /** Original file, or a progressive H.264/AAC MP4 transcode at `bitrate`. */
+  downloadUrl(itemId: string, mediaSourceId: string, bitrate: number): string {
+    const s = this.session;
+    if (!bitrate) return this.withApiKey(`${s.serverUrl}/Items/${itemId}/Download`);
+    return `${s.serverUrl}/Videos/${itemId}/stream.mp4${query({
+      mediaSourceId,
+      deviceId: s.deviceId,
+      container: 'mp4',
+      videoCodec: 'h264',
+      audioCodec: 'aac',
+      videoBitRate: bitrate - 192000,
+      audioBitRate: 192000,
+      maxAudioChannels: 2,
+      ApiKey: s.token,
+    })}`;
+  }
+
   /**
    * Build a URL for a media source: the static file when the device can play
    * it as is, otherwise the server's HLS URL (remux or full transcode).
@@ -350,11 +444,24 @@ export class JellyfinClient {
         mediaSourceId: source.Id,
         deviceId: s.deviceId,
         playSessionId,
-        api_key: s.token,
+        ApiKey: s.token,
       })}`;
     }
-    const url = `${s.serverUrl}${source.TranscodingUrl}`;
-    return /[?&]api_key=/i.test(url) ? url : `${url}&api_key=${s.token}`;
+    return this.withApiKey(`${s.serverUrl}${source.TranscodingUrl}`);
+  }
+
+  /**
+   * Jellyfin 10.11 dropped the legacy `api_key` parameter; `ApiKey` works on
+   * 10.9+. Players also get the Authorization header, see `authHeaders`.
+   */
+  withApiKey(url: string): string {
+    if (/[?&]api_?key=/i.test(url)) return url;
+    return `${url}${url.includes('?') ? '&' : '?'}ApiKey=${this.session.token}`;
+  }
+
+  /** Headers for native players and downloads fetching media directly. */
+  get authHeaders(): Record<string, string> {
+    return { Authorization: authHeader(this.session.deviceId, this.session.token) };
   }
 
   imageUrl(itemId: string, type: ImageType, opts: { tag?: string; width?: number; index?: number } = {}): string {
@@ -374,6 +481,25 @@ export class JellyfinClient {
   personImageUrl(personId: string, tag?: string) {
     return this.imageUrl(personId, 'Primary', { tag, width: 200 });
   }
+}
+
+export interface MediaSegment {
+  Type: 'Intro' | 'Outro' | 'Recap' | 'Preview' | 'Commercial' | 'Unknown';
+  StartTicks: number;
+  EndTicks: number;
+}
+
+export interface RemoteSubtitle {
+  Id: string;
+  Name?: string;
+  ProviderName?: string;
+  Format?: string;
+  Author?: string;
+  Comment?: string;
+  DownloadCount?: number;
+  CommunityRating?: number;
+  IsHashMatch?: boolean;
+  ThreeLetterISOLanguageName?: string;
 }
 
 export interface PlaybackReport {

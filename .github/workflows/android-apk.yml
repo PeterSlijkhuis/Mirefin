@@ -2,34 +2,54 @@ name: Android APK
 
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
   workflow_dispatch:
+
+# A newer push to the same branch cancels the build that's still running.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
+
+      # android/ is generated during the build, so cache Gradle's downloads directly.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('package-lock.json') }}
+          restore-keys: gradle-
 
       - run: npm ci
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
 
+      # arm64 covers practically every phone from the last several years and
+      # builds about 3x faster than all four ABIs.
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
-          name: WholphinMobile-apk
+          name: Mirefin-apk
           path: android/app/build/outputs/apk/release/app-release.apk

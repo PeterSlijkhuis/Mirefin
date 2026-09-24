@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { Button, Field } from '@/components/ui';
 import { useSession } from '@/lib/session';
 import { colors, spacing, type } from '@/lib/theme';
@@ -32,10 +32,8 @@ export default function Login() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.brand}>
-            <View style={styles.logo}>
-              <Ionicons name="play" size={34} color={colors.background} />
-            </View>
-            <Text style={type.hero}>WholphinMobile</Text>
+            <Image source={require('../../assets/brand/logo.png')} style={styles.logo} />
+            <Text style={type.hero}>Mirefin</Text>
             <Text style={[type.meta, { textAlign: 'center' }]}>
               Sign in to your Jellyfin server to get started.
             </Text>
@@ -72,14 +70,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   container: { padding: spacing.xl, gap: spacing.lg, flexGrow: 1, justifyContent: 'center', maxWidth: 480, width: '100%', alignSelf: 'center' },
   brand: { alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xl },
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
+  logo: { width: 112, height: 112, marginBottom: spacing.sm },
   error: { color: colors.danger, fontSize: 14 },
 });

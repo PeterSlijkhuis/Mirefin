@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.peterslijkhuis.mirefin'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.mpvplayer"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // libmpv + FFmpeg + libass, built by the Findroid project.
+  implementation 'dev.jdtech.mpv:libmpv:1.0.0'
+}

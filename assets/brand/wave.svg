@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3E7CF"/>
+      <stop offset="1" stop-color="#E4D2AE"/>
+    </linearGradient>
+    <linearGradient id="deep" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F6FA3"/>
+      <stop offset="1" stop-color="#0E2A4A"/>
+    </linearGradient>
+    <clipPath id="c"><circle cx="512" cy="512" r="440"/></clipPath>
+  </defs>
+  <g clip-path="url(#c)">
+    <rect width="1024" height="1024" fill="url(#sky)"/>
+    <!-- rising sun -->
+    <circle cx="700" cy="330" r="92" fill="#D9482B"/>
+    <!-- Fuji in the distance -->
+    <path d="M560 690 L690 560 L716 578 L740 560 L870 690 Z" fill="#1E4D78"/>
+    <path d="M665 585 L690 560 L716 578 L740 560 L760 580 L735 598 L715 585 L692 600 Z" fill="#F7F0E1"/>
+    <!-- great wave body -->
+    <path d="M40 1000 L40 640 C80 520 150 380 280 300 C400 226 540 236 600 300
+             C630 332 640 380 610 410 C590 360 540 336 490 348 C420 364 380 430 400 500
+             C420 570 500 610 560 640 C640 680 720 700 820 700 L1000 700 L1000 1000 Z" fill="url(#deep)"/>
+    <!-- inner lighter band -->
+    <path d="M110 1000 L110 690 C140 580 200 470 300 400 C370 352 440 340 490 348
+             C420 364 380 430 400 500 C420 570 500 610 560 640 C640 680 720 700 820 700 L1000 700 L1000 1000 Z"
+          fill="#3F86BD" opacity="0.55"/>
+    <!-- foam crest -->
+    <path d="M280 300 C400 226 540 236 600 300 C630 332 640 380 610 410
+             C598 392 580 382 560 384 C572 364 566 344 548 336 C548 356 534 368 516 368
+             C520 348 510 330 492 324 C488 344 474 356 456 356 C456 336 444 322 426 318
+             C420 338 404 350 386 348 C382 328 368 316 350 316 C344 338 326 350 306 348
+             C300 330 290 316 280 300 Z" fill="#F7F0E1"/>
+    <!-- foam claws -->
+    <g fill="#F7F0E1">
+      <circle cx="604" cy="412" r="14"/><circle cx="580" cy="398" r="11"/><circle cx="560" cy="392" r="9"/>
+      <circle cx="626" cy="388" r="9"/><circle cx="618" cy="438" r="8"/>
+    </g>
+    <!-- wave lines -->
+    <g fill="none" stroke="#F7F0E1" stroke-width="10" stroke-linecap="round" opacity="0.9">
+      <path d="M150 760 C200 620 270 500 360 440"/>
+      <path d="M210 820 C250 700 320 590 400 540"/>
+      <path d="M300 860 C340 770 400 700 470 660"/>
+    </g>
+    <!-- foreground swell -->
+    <path d="M0 1024 L0 800 C120 740 220 760 300 820 C380 880 480 880 560 830 C640 780 760 770 860 810 C920 834 980 840 1024 830 L1024 1024 Z" fill="#0E2A4A"/>
+    <path d="M300 820 C380 880 480 880 560 830" fill="none" stroke="#F7F0E1" stroke-width="10" stroke-linecap="round"/>
+    <path d="M860 810 C920 834 980 840 1024 830" fill="none" stroke="#F7F0E1" stroke-width="10" stroke-linecap="round"/>
+  </g>
+  <circle cx="512" cy="512" r="440" fill="none" stroke="#0E2A4A" stroke-width="18"/>
+</svg>
