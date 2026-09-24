@@ -2,7 +2,16 @@ name: Android APK
 
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
   workflow_dispatch:
+
+# A newer push to the same branch cancels the build that's still running.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -19,15 +28,18 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+          cache: gradle
 
       - run: npm ci
 
       - name: Generate native Android project
         run: npx expo prebuild --platform android --no-install
 
+      # arm64 covers practically every phone from the last several years and
+      # builds about 3x faster than all four ABIs.
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       - uses: actions/upload-artifact@v5
         with:
