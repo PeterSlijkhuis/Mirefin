@@ -28,7 +28,15 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
+
+      # android/ is generated during the build, so cache Gradle's downloads directly.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('package-lock.json') }}
+          restore-keys: gradle-
 
       - run: npm ci
 
