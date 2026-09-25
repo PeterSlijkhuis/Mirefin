@@ -32,6 +32,8 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
   private var uri: String? = null
   private var startSeconds = 0.0
   private var fileLoaded = false
+  private var surfaceAttached = false
+  private var loadPending = false
   private var pendingAid: Int? = null
   private var pendingSid: Int? = null
   private var pendingSubUrl: String? = null
@@ -88,9 +90,19 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     startSeconds = (source["startSeconds"] as? Number)?.toDouble() ?: 0.0
     fileLoaded = false
     addedSubUrl = null
+    loadPending = true
+    loadIfReady()
+  }
+
+  // Like mpv-android: only load once the surface exists. Loading earlier makes
+  // mpv give up on video output, leaving a black screen.
+  private fun loadIfReady() {
     val m = mpv ?: return
+    val u = uri ?: return
+    if (!loadPending || !surfaceAttached) return
+    loadPending = false
     m.setPropertyString("start", if (startSeconds > 0) startSeconds.toString() else "none")
-    m.command(arrayOf("loadfile", next))
+    m.command(arrayOf("loadfile", u))
   }
 
   fun setPaused(paused: Boolean) {
@@ -175,7 +187,8 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     val m = mpv ?: return
     m.attachSurface(holder.surface)
     m.setOptionString("force-window", "yes")
-    m.setPropertyString("vo", "gpu")
+    surfaceAttached = true
+    if (loadPending) loadIfReady() else m.setPropertyString("vo", "gpu")
   }
 
   override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -184,6 +197,7 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
 
   override fun surfaceDestroyed(holder: SurfaceHolder) {
     val m = mpv ?: return
+    surfaceAttached = false
     m.setPropertyString("vo", "null")
     m.setOptionString("force-window", "no")
     m.detachSurface()

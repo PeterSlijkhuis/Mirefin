@@ -38,7 +38,10 @@ export default function Home() {
     const latest = await Promise.all(
       libraries.map(async (lib) => ({ lib, items: await client.latest(lib.Id).catch(() => [] as BaseItem[]) })),
     );
-    return { resume: resume.Items, nextUp: nextUp.Items, latest };
+    // An episode already in Continue Watching (or its series) shouldn't show again in Next Up.
+    const inProgress = new Set(resume.Items.flatMap((i) => [i.Id, i.SeriesId].filter(Boolean)));
+    const upNext = nextUp.Items.filter((i) => !inProgress.has(i.Id) && !(i.SeriesId && inProgress.has(i.SeriesId)));
+    return { resume: resume.Items, nextUp: upNext, latest };
   }, [client, settings.homeMaxDays]);
 
   // Refresh when returning from the player so progress bars stay current.

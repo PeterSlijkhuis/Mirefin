@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BaseItem, episodeLabel, MediaSegment, PlaybackReport, TICKS_PER_SECOND } from '@/api/jellyfin';
 import { Engine } from '@/components/player/Engines';
-import { PlayerMenu } from '@/components/player/PlayerMenu';
+import { methodLabel, PlayerMenu } from '@/components/player/PlayerMenu';
 import { SubtitleOverlay } from '@/components/player/SubtitleOverlay';
 import { castItem } from '@/lib/cast';
 import { useDownloads } from '@/lib/downloads';
@@ -186,7 +186,7 @@ export default function Player() {
   const fail = (message: string) => {
     const p = planRef.current;
     if (!p) return setError(message);
-    attempts.current.push(`${ENGINE_LABEL[p.engine]}, ${p.method.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}: ${message}`);
+    attempts.current.push(`${ENGINE_LABEL[p.engine]}, ${methodLabel(p.method).toLowerCase()}: ${message}`);
     if (p.engine !== 'native' && !fellBack.current.engine) {
       fellBack.current.engine = true;
       setNotice(`${ENGINE_LABEL[p.engine]} couldn't play this (${message}). Switched to ${ENGINE_LABEL.native}.`);
@@ -238,6 +238,8 @@ export default function Player() {
   };
 
   const onProgress = (pos: number, duration: number) => {
+    // Time moving means the stream is playing, even if a load event was missed.
+    if (!started.current) onReady();
     position.current = pos;
     setTime({ position: pos, duration });
     const seg = segments.find((s) => pos >= s.StartTicks / T && pos < s.EndTicks / T - 1);
@@ -372,7 +374,7 @@ export default function Player() {
             </View>
             {plan && (
               <Text style={styles.badge}>
-                {ENGINE_LABEL[plan.engine]} · {offline ? 'Offline' : plan.method.replace('Play', ' play').replace('Stream', ' stream')}
+                {ENGINE_LABEL[plan.engine]} · {offline ? 'Offline' : methodLabel(plan.method)}
               </Text>
             )}
             {!offline && <CastButton style={styles.castButton} tintColor="#fff" />}
