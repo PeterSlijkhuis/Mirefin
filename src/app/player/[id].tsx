@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BaseItem, episodeLabel, MediaSegment, PlaybackReport, TICKS_PER_SECOND } from '@/api/jellyfin';
 import { Engine } from '@/components/player/Engines';
-import { PlayerMenu } from '@/components/player/PlayerMenu';
+import { methodLabel, PlayerMenu } from '@/components/player/PlayerMenu';
 import { SubtitleOverlay } from '@/components/player/SubtitleOverlay';
 import { castItem } from '@/lib/cast';
 import { useDownloads } from '@/lib/downloads';
@@ -61,7 +61,9 @@ export default function Player() {
   const position = useRef(startSeconds);
   const planRef = useRef<PlaybackPlan>(undefined);
   const started = useRef(false);
-  const fellBack = useRef({ engine: false, transcode: false });
+  const fellBack = useRef({ engine: false, remux: false, transcode: false });
+  /** Why each attempt failed, shown if every fallback fails. */
+  const attempts = useRef<string[]>([]);
   const autoSkipped = useRef(new Set<number>());
 
   /* ---------- reporting ---------- */
@@ -184,19 +186,36 @@ export default function Player() {
   const fail = (message: string) => {
     const p = planRef.current;
     if (!p) return setError(message);
+    attempts.current.push(`${ENGINE_LABEL[p.engine]}, ${methodLabel(p.method).toLowerCase()}: ${message}`);
     if (p.engine !== 'native' && !fellBack.current.engine) {
       fellBack.current.engine = true;
       setNotice(`${ENGINE_LABEL[p.engine]} couldn't play this (${message}). Switched to ${ENGINE_LABEL.native}.`);
       reload({ engine: 'native' });
       return;
     }
+    // Remux before transcoding: it keeps 4K/HDR video untouched and only
+    // rewraps it, so a failed direct play doesn't cost picture quality.
+    if (!offline && p.method === 'DirectPlay' && !fellBack.current.remux) {
+      fellBack.current.remux = true;
+      setNotice(`Direct play failed (${message}). Trying remux.`);
+      reload({ noDirectPlay: true });
+      return;
+    }
     if (!offline && p.method !== 'Transcode' && !fellBack.current.transcode) {
       fellBack.current.transcode = true;
+      setNotice(`${methodLabel(p.method)} failed (${message}). Transcoding instead.`);
       reload({ forceTranscode: true });
       return;
     }
-    setError(`${ENGINE_LABEL[p.engine]} couldn't play this (${p.method}): ${message}`);
+    setError(`This video couldn't be played.\n\n${attempts.current.join('\n\n')}`);
   };
+
+  /** Drops callbacks from an engine that has been replaced by a newer plan. */
+  const live =
+    <A extends unknown[]>(owner: PlaybackPlan, fn: (...args: A) => void) =>
+    (...args: A) => {
+      if (planRef.current === owner) fn(...args);
+    };
 
   const playNext = () => {
     if (next) router.replace({ pathname: '/player/[id]', params: { id: next.Id } });
@@ -228,6 +247,8 @@ export default function Player() {
   };
 
   const onProgress = (pos: number, duration: number) => {
+    // Time moving means the stream is playing, even if a load event was missed.
+    if (!started.current) onReady();
     position.current = pos;
     setTime({ position: pos, duration });
     const seg = segments.find((s) => pos >= s.StartTicks / T && pos < s.EndTicks / T - 1);
@@ -299,12 +320,12 @@ export default function Player() {
           hardwareDecoding={settings.hardwareDecoding}
           title={title}
           artist={subtitleLine}
-          onProgress={onProgress}
-          onReady={onReady}
-          onPausedChange={setPaused}
-          onBuffering={setBuffering}
-          onEnd={onEnd}
-          onError={fail}
+          onProgress={live(plan, onProgress)}
+          onReady={live(plan, onReady)}
+          onPausedChange={live(plan, setPaused)}
+          onBuffering={live(plan, setBuffering)}
+          onEnd={live(plan, onEnd)}
+          onError={live(plan, fail)}
         />
       )}
 
@@ -330,12 +351,13 @@ export default function Player() {
       {error && (
         <View style={styles.center}>
           <Ionicons name="alert-circle-outline" size={40} color={colors.danger} />
-          <Text style={styles.error}>{error}</Text>
+          <Text style={styles.error} selectable>{error}</Text>
           <Pressable
             style={styles.retry}
             onPress={() => {
-              fellBack.current = { engine: false, transcode: false };
-              reload({ forceTranscode: false, engine: undefined });
+              fellBack.current = { engine: false, remux: false, transcode: false };
+              attempts.current = [];
+              reload({ forceTranscode: false, noDirectPlay: false, engine: undefined });
             }}
           >
             <Text style={styles.retryText}>Try again</Text>
@@ -361,7 +383,7 @@ export default function Player() {
             </View>
             {plan && (
               <Text style={styles.badge}>
-                {ENGINE_LABEL[plan.engine]} · {offline ? 'Offline' : plan.method.replace('Play', ' play').replace('Stream', ' stream')}
+                {ENGINE_LABEL[plan.engine]} · {offline ? 'Offline' : methodLabel(plan.method)}
               </Text>
             )}
             {!offline && <CastButton style={styles.castButton} tintColor="#fff" />}
@@ -450,8 +472,8 @@ export default function Player() {
           onSubtitleDelay={(d) => update({ subtitleDelay: Math.round(d * 10) / 10 })}
           onRate={setRate}
           onEngine={(e) => {
-            fellBack.current = { engine: false, transcode: false };
-            reload({ engine: e });
+            fellBack.current = { engine: false, remux: false, transcode: false };
+            reload({ engine: e, noDirectPlay: false, forceTranscode: false });
           }}
           onBitrate={(b) => reload({ maxBitrate: b })}
           onClose={() => setMenu(false)}

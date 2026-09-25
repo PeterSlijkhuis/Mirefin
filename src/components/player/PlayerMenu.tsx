@@ -18,6 +18,12 @@ export const BITRATES: { label: string; value: number }[] = [
   { label: '720 kbps', value: 720_000 },
 ];
 
+export const methodLabel = (m: PlaybackPlan['method']) =>
+  m === 'DirectPlay' ? 'Direct play' : m === 'DirectStream' ? 'Remux' : 'Transcode';
+
+/** "AudioCodecNotSupported" -> "audio codec not supported" */
+const reasonLabel = (r: string) => r.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+
 type Tab = 'Audio' | 'Subtitles' | 'Speed' | 'Player' | 'Quality';
 
 export function PlayerMenu(p: {
@@ -43,7 +49,7 @@ export function PlayerMenu(p: {
     <View style={styles.backdrop}>
       <Pressable style={StyleSheet.absoluteFill} onPress={p.onClose} accessibilityLabel="Close menu" />
       <View style={styles.panel}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.tabs}>
           {tabs.map((t) => (
             <Pressable key={t} onPress={() => setTab(t)} style={[styles.tab, tab === t && styles.tabActive]}>
               <Text style={[styles.tabText, tab === t && { color: colors.text }]}>{t}</Text>
@@ -101,7 +107,10 @@ export function PlayerMenu(p: {
 
           {tab === 'Quality' && (
             <>
-              <Text style={styles.note}>Currently {p.plan.method.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}</Text>
+              <Text style={styles.note}>
+                Currently {methodLabel(p.plan.method).toLowerCase()}
+                {p.plan.transcodeReasons.length ? ` because: ${p.plan.transcodeReasons.map(reasonLabel).join(', ')}` : ''}
+              </Text>
               {BITRATES.map((b) => (
                 <Option key={b.value} label={b.label} selected={b.value === p.bitrate} onPress={() => p.onBitrate(b.value)} />
               ))}
@@ -145,8 +154,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.lg,
     paddingTop: spacing.md,
   },
-  tabs: { paddingHorizontal: spacing.md, gap: spacing.xs, paddingBottom: spacing.sm },
-  tab: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill },
+  tabs: { paddingHorizontal: spacing.md, gap: spacing.xs, paddingBottom: spacing.sm, alignItems: 'center' },
+  tab: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, alignSelf: 'center' },
   tabActive: { backgroundColor: colors.accentDim },
   tabText: { color: colors.textMuted, fontWeight: '600' },
   option: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },

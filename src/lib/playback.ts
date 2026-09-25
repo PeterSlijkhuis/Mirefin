@@ -24,6 +24,8 @@ export interface PlaybackPlan {
   uri: string;
   headers: Record<string, string>;
   method: NonNullable<PlaybackReport['PlayMethod']>;
+  /** Why the server isn't direct playing, e.g. AudioCodecNotSupported. */
+  transcodeReasons: string[];
   isHls: boolean;
   audioStreams: MediaStream[];
   subtitleStreams: MediaStream[];
@@ -40,10 +42,14 @@ export interface PlanOptions {
   /** -1 turns subtitles off. */
   subtitleIndex?: number;
   engine?: PlayerEngine;
+  /** Skip direct play but let the server copy the video (remux). */
+  noDirectPlay?: boolean;
   forceTranscode?: boolean;
   /** Overrides the streaming bitrate setting for this session; 0 = unlimited. */
   maxBitrate?: number;
 }
+
+const VIDEO_REASONS = /^(Video|Subtitle|ContainerBitrate|Anamorphic|Interlaced|RefFrames)/;
 
 const isAnime = (item: BaseItem) =>
   (item.Genres ?? []).some((g) => /anime/i.test(g)) || /anime/i.test(item.SeriesName ?? '');
@@ -124,6 +130,7 @@ export async function planPlayback(
 
   const engine = availableEngine(opts.engine ?? chooseEngine(settings, item, streams, sub));
   const force = !!opts.forceTranscode;
+  const noDirect = force || !!opts.noDirectPlay;
 
   const info = await client.playbackInfo(itemId, {
     startTimeTicks: opts.startTicks,
@@ -132,15 +139,19 @@ export async function planPlayback(
     mediaSourceId: item.MediaSources?.[0]?.Id,
     audioStreamIndex: audio?.Index,
     subtitleStreamIndex: sub?.Index ?? -1,
-    enableDirectPlay: settings.directPlay && !force,
+    enableDirectPlay: settings.directPlay && !noDirect,
     enableDirectStream: settings.directStream && !force,
   });
   const source = info.MediaSources?.[0];
   if (!source) throw new Error('The server returned no playable source for this item.');
   if (source.MediaStreams?.length) streams = source.MediaStreams;
 
-  const direct = !!source.SupportsDirectPlay && !force && settings.directPlay;
-  const method: PlaybackPlan['method'] = direct ? 'DirectPlay' : source.SupportsDirectStream && !force ? 'DirectStream' : 'Transcode';
+  const direct = !!source.SupportsDirectPlay && !noDirect && settings.directPlay;
+  const reasonsParam = /[?&]TranscodeReasons=([^&]*)/i.exec(source.TranscodingUrl ?? '')?.[1];
+  const transcodeReasons = direct || !reasonsParam ? [] : decodeURIComponent(reasonsParam).split(',').filter(Boolean);
+  // Without a video reason the server copies the video and only remuxes or converts audio.
+  const videoTouched = transcodeReasons.some((r) => VIDEO_REASONS.test(r)) || force;
+  const method: PlaybackPlan['method'] = direct ? 'DirectPlay' : videoTouched ? 'Transcode' : 'DirectStream';
   const uri = client.streamUrl(itemId, direct ? source : { ...source, SupportsDirectPlay: false }, info.PlaySessionId);
 
   const audioStreams = streams.filter((s) => s.Type === 'Audio');
@@ -172,6 +183,7 @@ export async function planPlayback(
     uri,
     headers: client.authHeaders,
     method,
+    transcodeReasons,
     isHls: !direct || /\.m3u8/i.test(uri),
     audioStreams,
     subtitleStreams,
@@ -230,6 +242,7 @@ export function planOffline(record: DownloadRecord, settings: Settings, opts: Pl
     uri: record.videoUri ?? '',
     headers: {},
     method: 'DirectPlay',
+    transcodeReasons: [],
     isHls: false,
     audioStreams: record.original ? audioStreams : audioStreams.slice(0, 1),
     subtitleStreams: usable.filter((s) => s.Type === 'Subtitle'),

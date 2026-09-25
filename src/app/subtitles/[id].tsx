@@ -78,7 +78,7 @@ export default function SubtitleSearch() {
             </View>
             <View style={{ gap: spacing.sm }}>
               <Text style={styles.heading}>Search online</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={{ gap: spacing.sm, alignItems: "center" }}>
                 {LANGUAGES.map((l) => (
                   <Chip key={l.code} label={l.label} active={lang === l.code} onPress={() => setLang(l.code)} />
                 ))}

@@ -18,22 +18,31 @@ import { openItem, playItem, toPosterCard, toThumbCard } from '@/lib/items';
 import { useClient } from '@/lib/session';
 import { colors, spacing } from '@/lib/theme';
 import { useAsync } from '@/lib/useAsync';
+import { useSettings } from '@/lib/settings';
 
 const HOME_COLLECTIONS = new Set(['movies', 'tvshows', 'homevideos', 'musicvideos', 'boxsets', undefined]);
 
 export default function Home() {
   const client = useClient();
+  const { settings } = useSettings();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, error, loading, reload } = useAsync(async () => {
-    const [resume, nextUp, views] = await Promise.all([client.resume(), client.nextUp(), client.userViews()]);
+    const [resume, nextUp, views] = await Promise.all([
+      client.resume(20, settings.homeMaxDays),
+      client.nextUp(20, undefined, settings.homeMaxDays),
+      client.userViews(),
+    ]);
     const libraries = views.Items.filter((v) => HOME_COLLECTIONS.has(v.CollectionType));
     const latest = await Promise.all(
       libraries.map(async (lib) => ({ lib, items: await client.latest(lib.Id).catch(() => [] as BaseItem[]) })),
     );
-    return { resume: resume.Items, nextUp: nextUp.Items, latest };
-  }, [client]);
+    // An episode already in Continue Watching (or its series) shouldn't show again in Next Up.
+    const inProgress = new Set(resume.Items.flatMap((i) => [i.Id, i.SeriesId].filter(Boolean)));
+    const upNext = nextUp.Items.filter((i) => !inProgress.has(i.Id) && !(i.SeriesId && inProgress.has(i.SeriesId)));
+    return { resume: resume.Items, nextUp: upNext, latest };
+  }, [client, settings.homeMaxDays]);
 
   // Refresh when returning from the player so progress bars stay current.
   const firstFocus = useRef(true);

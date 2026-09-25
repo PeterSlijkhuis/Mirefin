@@ -77,6 +77,10 @@ export interface Settings {
   /** Seconds to shift overlay subtitles; positive shows them later. */
   subtitleDelay: number;
 
+  /* Home */
+  /** Hide Continue Watching / Next Up entries last played more than this many days ago; 0 = never. */
+  homeMaxDays: number;
+
   /* Downloads */
   /** 0 = original file, otherwise transcode to this bitrate. */
   downloadBitrate: number;
@@ -120,6 +124,8 @@ export const DEFAULT_SETTINGS: Settings = {
   subtitleBold: false,
   subtitleOffset: 6,
   subtitleDelay: 0,
+
+  homeMaxDays: 60,
 
   downloadBitrate: 0,
   downloadSubtitles: true,

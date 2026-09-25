@@ -19,7 +19,8 @@ export type ProfileTarget = 'native' | 'full' | 'cast';
  * - cast: Chromecast default receiver.
  */
 export function buildDeviceProfile(target: ProfileTarget, settings: Settings) {
-  const maxBitrate = settings.maxBitrate || 120_000_000;
+  // 0 means unlimited; 400 Mbps covers any UHD Blu-ray remux.
+  const maxBitrate = settings.maxBitrate || 400_000_000;
   const channels = String(settings.maxAudioChannels);
   const isAndroid = Platform.OS === 'android';
 
@@ -71,17 +72,32 @@ export function buildDeviceProfile(target: ProfileTarget, settings: Settings) {
     MusicStreamingTranscodingBitrate: 384000,
     DirectPlayProfiles: directPlay,
     TranscodingProfiles: [
-      {
-        Type: 'Video',
-        Container: 'ts',
-        Protocol: 'hls',
-        Context: 'Streaming',
-        VideoCodec: 'h264',
-        AudioCodec: 'aac,mp3',
-        MaxAudioChannels: channels,
-        BreakOnNonKeyFrames: true,
-        MinSegments: 1,
-      },
+      target === 'cast'
+        ? {
+            Type: 'Video',
+            Container: 'ts',
+            Protocol: 'hls',
+            Context: 'Streaming',
+            VideoCodec: 'h264',
+            AudioCodec: 'aac,mp3',
+            MaxAudioChannels: '2',
+            BreakOnNonKeyFrames: true,
+            MinSegments: 1,
+          }
+        : {
+            // fMP4 HLS, so the server can copy HEVC/AV1 video untouched and only
+            // convert what the player can't take (usually TrueHD or DTS audio).
+            // h264 comes first because the server encodes to the first codec.
+            Type: 'Video',
+            Container: 'mp4',
+            Protocol: 'hls',
+            Context: 'Streaming',
+            VideoCodec: ['h264', settings.allowHevc && 'hevc', settings.allowAv1 && 'av1'].filter(Boolean).join(','),
+            AudioCodec: isAndroid ? 'aac,ac3,eac3,mp3,opus,flac' : 'aac,ac3,eac3,mp3,flac,alac',
+            MaxAudioChannels: channels,
+            BreakOnNonKeyFrames: true,
+            MinSegments: 1,
+          },
       { Type: 'Audio', Container: 'aac', Protocol: 'http', Context: 'Streaming', AudioCodec: 'aac' },
     ],
     ContainerProfiles: [],

@@ -17,7 +17,7 @@ import expo.modules.kotlin.views.ExpoView
  * posted to the main thread before dispatch.
  */
 class MpvPlayerView(context: Context, appContext: AppContext) :
-  ExpoView(context, appContext), SurfaceHolder.Callback, MPVLib.EventObserver {
+  ExpoView(context, appContext), SurfaceHolder.Callback, MPVLib.EventObserver, MPVLib.LogObserver {
 
   private val onProgress by EventDispatcher()
   private val onStateChange by EventDispatcher()
@@ -32,6 +32,8 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
   private var uri: String? = null
   private var startSeconds = 0.0
   private var fileLoaded = false
+  private var surfaceAttached = false
+  private var loadPending = false
   private var pendingAid: Int? = null
   private var pendingSid: Int? = null
   private var pendingSubUrl: String? = null
@@ -40,6 +42,18 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
   private var position = 0.0
   private var duration = 0.0
   private var lastProgressAt = 0L
+  private val recentErrors = ArrayDeque<String>()
+
+  // React Native only sizes views it created itself, so without this the
+  // SurfaceView stays 0x0, its surface is never created and mpv never loads.
+  override val shouldUseAndroidLayout = true
+
+  override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+    val w = r - l
+    val h = b - t
+    surface.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+    surface.layout(0, 0, w, h)
+  }
 
   init {
     surface.holder.addCallback(this)
@@ -70,6 +84,7 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     m.setOptionString("user-agent", "Mirefin")
     m.init()
     m.addObserver(this)
+    m.addLogObserver(this)
     m.observeProperty("time-pos", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
     m.observeProperty("duration", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE)
     m.observeProperty("pause", MPVLib.MpvFormat.MPV_FORMAT_FLAG)
@@ -86,9 +101,19 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     startSeconds = (source["startSeconds"] as? Number)?.toDouble() ?: 0.0
     fileLoaded = false
     addedSubUrl = null
+    loadPending = true
+    loadIfReady()
+  }
+
+  // Like mpv-android: only load once the surface exists. Loading earlier makes
+  // mpv give up on video output, leaving a black screen.
+  private fun loadIfReady() {
     val m = mpv ?: return
+    val u = uri ?: return
+    if (!loadPending || !surfaceAttached) return
+    loadPending = false
     m.setPropertyString("start", if (startSeconds > 0) startSeconds.toString() else "none")
-    m.command(arrayOf("loadfile", next))
+    m.command(arrayOf("loadfile", u))
   }
 
   fun setPaused(paused: Boolean) {
@@ -161,6 +186,7 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     main.removeCallbacksAndMessages(null)
     mpv?.let {
       it.removeObserver(this)
+      it.removeLogObserver(this)
       it.destroy()
     }
     mpv = null
@@ -172,7 +198,8 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
     val m = mpv ?: return
     m.attachSurface(holder.surface)
     m.setOptionString("force-window", "yes")
-    m.setPropertyString("vo", "gpu")
+    surfaceAttached = true
+    if (loadPending) loadIfReady() else m.setPropertyString("vo", "gpu")
   }
 
   override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
@@ -181,6 +208,7 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
 
   override fun surfaceDestroyed(holder: SurfaceHolder) {
     val m = mpv ?: return
+    surfaceAttached = false
     m.setPropertyString("vo", "null")
     m.setOptionString("force-window", "no")
     m.detachSurface()
@@ -224,10 +252,24 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
       }
       MPVLib.MpvEvent.MPV_EVENT_END_FILE -> main.post {
         // An end right after loading means mpv couldn't open the stream.
-        if (!fileLoaded) onError(mapOf("message" to "mpv could not open the stream"))
+        if (!fileLoaded) onError(mapOf("message" to failureMessage()))
         else onEnd(mapOf("position" to position, "duration" to duration))
       }
     }
+  }
+
+  // mpv's own error lines explain why a stream didn't open; keep the last few.
+  override fun logMessage(prefix: String, level: Int, text: String) {
+    if (level > 20) return // MPV_LOG_LEVEL_ERROR
+    synchronized(recentErrors) {
+      recentErrors.addLast("$prefix: ${text.trim()}")
+      while (recentErrors.size > 3) recentErrors.removeFirst()
+    }
+  }
+
+  private fun failureMessage(): String {
+    val detail = synchronized(recentErrors) { recentErrors.joinToString(" / ") }
+    return if (detail.isEmpty()) "mpv could not open the stream" else "mpv could not open the stream ($detail)"
   }
 
   private fun readTracks(): List<Map<String, Any>> {

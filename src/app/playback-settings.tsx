@@ -134,6 +134,15 @@ export default function PlaybackSettings() {
         />
       </Section>
 
+      <Section title="Home" note="Continue Watching and Next Up skip anything you last watched longer ago than this.">
+        <Pick
+          label="Hide after"
+          value={s.homeMaxDays}
+          options={[14, 30, 60, 180, 365, 0].map((v) => ({ value: v, label: v ? `${v} days` : 'Never' }))}
+          onChange={set('homeMaxDays')}
+        />
+      </Section>
+
       <Section title="Downloads">
         <Pick
           label="Quality"
@@ -180,7 +189,7 @@ function Pick<T extends string | number>({ label, value, options, onChange }: { 
   return (
     <View style={[styles.row, { flexDirection: 'column', alignItems: 'stretch' }]}>
       <Text style={styles.label}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.chips}>
         {options.map((o) => (
           <Pressable key={String(o.value)} onPress={() => onChange(o.value)} style={[styles.chip, o.value === value && styles.chipActive]}>
             <Text style={[styles.chipText, o.value === value && { color: colors.text }]}>{o.label}</Text>
@@ -212,8 +221,17 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   label: { color: colors.text, fontSize: 15 },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.surfaceRaised },
-  chipActive: { backgroundColor: colors.accentDim, borderWidth: 1, borderColor: colors.accent },
+  chips: { gap: spacing.sm, alignItems: 'center' },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: colors.surfaceRaised,
+    alignSelf: 'center',
+  },
+  chipActive: { backgroundColor: colors.accentDim, borderColor: colors.accent },
   chipText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   step: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
   stepValue: { color: colors.text, minWidth: 56, textAlign: 'center', fontVariant: ['tabular-nums'] },
