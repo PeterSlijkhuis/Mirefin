@@ -42,6 +42,8 @@ export interface PlanOptions {
   /** -1 turns subtitles off. */
   subtitleIndex?: number;
   engine?: PlayerEngine;
+  /** Skip direct play but let the server copy the video (remux). */
+  noDirectPlay?: boolean;
   forceTranscode?: boolean;
   /** Overrides the streaming bitrate setting for this session; 0 = unlimited. */
   maxBitrate?: number;
@@ -128,6 +130,7 @@ export async function planPlayback(
 
   const engine = availableEngine(opts.engine ?? chooseEngine(settings, item, streams, sub));
   const force = !!opts.forceTranscode;
+  const noDirect = force || !!opts.noDirectPlay;
 
   const info = await client.playbackInfo(itemId, {
     startTimeTicks: opts.startTicks,
@@ -136,14 +139,14 @@ export async function planPlayback(
     mediaSourceId: item.MediaSources?.[0]?.Id,
     audioStreamIndex: audio?.Index,
     subtitleStreamIndex: sub?.Index ?? -1,
-    enableDirectPlay: settings.directPlay && !force,
+    enableDirectPlay: settings.directPlay && !noDirect,
     enableDirectStream: settings.directStream && !force,
   });
   const source = info.MediaSources?.[0];
   if (!source) throw new Error('The server returned no playable source for this item.');
   if (source.MediaStreams?.length) streams = source.MediaStreams;
 
-  const direct = !!source.SupportsDirectPlay && !force && settings.directPlay;
+  const direct = !!source.SupportsDirectPlay && !noDirect && settings.directPlay;
   const reasonsParam = /[?&]TranscodeReasons=([^&]*)/i.exec(source.TranscodingUrl ?? '')?.[1];
   const transcodeReasons = direct || !reasonsParam ? [] : decodeURIComponent(reasonsParam).split(',').filter(Boolean);
   // Without a video reason the server copies the video and only remuxes or converts audio.

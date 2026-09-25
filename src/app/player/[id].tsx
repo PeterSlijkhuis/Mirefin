@@ -61,7 +61,7 @@ export default function Player() {
   const position = useRef(startSeconds);
   const planRef = useRef<PlaybackPlan>(undefined);
   const started = useRef(false);
-  const fellBack = useRef({ engine: false, transcode: false });
+  const fellBack = useRef({ engine: false, remux: false, transcode: false });
   /** Why each attempt failed, shown if every fallback fails. */
   const attempts = useRef<string[]>([]);
   const autoSkipped = useRef(new Set<number>());
@@ -193,8 +193,17 @@ export default function Player() {
       reload({ engine: 'native' });
       return;
     }
+    // Remux before transcoding: it keeps 4K/HDR video untouched and only
+    // rewraps it, so a failed direct play doesn't cost picture quality.
+    if (!offline && p.method === 'DirectPlay' && !fellBack.current.remux) {
+      fellBack.current.remux = true;
+      setNotice(`Direct play failed (${message}). Trying remux.`);
+      reload({ noDirectPlay: true });
+      return;
+    }
     if (!offline && p.method !== 'Transcode' && !fellBack.current.transcode) {
       fellBack.current.transcode = true;
+      setNotice(`${methodLabel(p.method)} failed (${message}). Transcoding instead.`);
       reload({ forceTranscode: true });
       return;
     }
@@ -346,9 +355,9 @@ export default function Player() {
           <Pressable
             style={styles.retry}
             onPress={() => {
-              fellBack.current = { engine: false, transcode: false };
+              fellBack.current = { engine: false, remux: false, transcode: false };
               attempts.current = [];
-              reload({ forceTranscode: false, engine: undefined });
+              reload({ forceTranscode: false, noDirectPlay: false, engine: undefined });
             }}
           >
             <Text style={styles.retryText}>Try again</Text>
@@ -463,8 +472,8 @@ export default function Player() {
           onSubtitleDelay={(d) => update({ subtitleDelay: Math.round(d * 10) / 10 })}
           onRate={setRate}
           onEngine={(e) => {
-            fellBack.current = { engine: false, transcode: false };
-            reload({ engine: e });
+            fellBack.current = { engine: false, remux: false, transcode: false };
+            reload({ engine: e, noDirectPlay: false, forceTranscode: false });
           }}
           onBitrate={(b) => reload({ maxBitrate: b })}
           onClose={() => setMenu(false)}

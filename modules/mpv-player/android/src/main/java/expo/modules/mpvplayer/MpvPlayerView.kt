@@ -44,6 +44,17 @@ class MpvPlayerView(context: Context, appContext: AppContext) :
   private var lastProgressAt = 0L
   private val recentErrors = ArrayDeque<String>()
 
+  // React Native only sizes views it created itself, so without this the
+  // SurfaceView stays 0x0, its surface is never created and mpv never loads.
+  override val shouldUseAndroidLayout = true
+
+  override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+    val w = r - l
+    val h = b - t
+    surface.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+    surface.layout(0, 0, w, h)
+  }
+
   init {
     surface.holder.addCallback(this)
     addView(surface, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
